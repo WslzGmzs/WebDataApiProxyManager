@@ -7,6 +7,10 @@ use wdapm_core::{
     join_url, normalize_rest_path,
 };
 
+const KEYLESS_SEARCH_ROUTE: &str = "search";
+const KEYLESS_SCRAPE_ROUTE: &str = "scrape";
+const KEYLESS_INTERACT_ROUTE: &str = "interact";
+
 pub fn adapter() -> Arc<dyn ProviderAdapter> {
     Arc::new(FirecrawlAdapter)
 }
@@ -55,8 +59,12 @@ impl ProviderAdapter for FirecrawlAdapter {
                 &route.upstream_path,
                 route.query.as_deref(),
             ),
-            auth: ProviderAuth::Bearer(account.api_key.clone()),
+            auth: firecrawl_auth(account),
         })
+    }
+
+    fn supports_account_for_route(&self, route: &ProviderRoute, account: &ProviderAccount) -> bool {
+        !account.api_key.trim().is_empty() || is_keyless_firecrawl_route(&route.upstream_path)
     }
 
     fn classify_response(&self, status: u16) -> ProviderResponseClass {
@@ -67,6 +75,31 @@ impl ProviderAdapter for FirecrawlAdapter {
             _ => ProviderResponseClass::passthrough(),
         }
     }
+}
+
+fn firecrawl_auth(account: &ProviderAccount) -> ProviderAuth {
+    if account.api_key.trim().is_empty() {
+        ProviderAuth::None
+    } else {
+        ProviderAuth::Bearer(account.api_key.clone())
+    }
+}
+
+fn is_keyless_firecrawl_route(upstream_path: &str) -> bool {
+    let normalized = upstream_path.trim_matches('/');
+    let normalized = normalized.strip_prefix("v2/").unwrap_or(normalized);
+    normalized == KEYLESS_SEARCH_ROUTE
+        || normalized == KEYLESS_SCRAPE_ROUTE
+        || normalized == KEYLESS_INTERACT_ROUTE
+        || is_keyless_interact_route(normalized)
+}
+
+fn is_keyless_interact_route(normalized_path: &str) -> bool {
+    let mut segments = normalized_path.split('/');
+    matches!(segments.next(), Some(KEYLESS_SCRAPE_ROUTE))
+        && matches!(segments.next(), Some(value) if !value.is_empty())
+        && matches!(segments.next(), Some(KEYLESS_INTERACT_ROUTE))
+        && segments.next().is_none()
 }
 
 pub fn detect_async_job(
@@ -165,4 +198,74 @@ fn parse_json_body(body: &[u8]) -> Result<Value, ProviderError> {
     serde_json::from_slice(body).map_err(|error| {
         ProviderError::InvalidRoute(format!("invalid firecrawl json payload: {error}"))
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use wdapm_core::ProviderAccountStatus;
+
+    #[test]
+    fn keyless_account_supports_search_route_without_auth() {
+        let adapter = FirecrawlAdapter;
+        let route = adapter
+            .parse_route("v2/search", None)
+            .expect("search route should parse");
+        let account = provider_account("");
+
+        assert!(adapter.supports_account_for_route(&route, &account));
+        assert!(matches!(firecrawl_auth(&account), ProviderAuth::None));
+    }
+
+    #[test]
+    fn keyless_account_supports_scrape_interact_route() {
+        let adapter = FirecrawlAdapter;
+        let route = adapter
+            .parse_route("v2/scrape/scrape-id/interact", None)
+            .expect("interact route should parse");
+        let account = provider_account("");
+
+        assert!(adapter.supports_account_for_route(&route, &account));
+    }
+
+    #[test]
+    fn keyless_account_does_not_support_crawl_route() {
+        let adapter = FirecrawlAdapter;
+        let route = adapter
+            .parse_route("v2/crawl", None)
+            .expect("crawl route should parse");
+        let account = provider_account("");
+
+        assert!(!adapter.supports_account_for_route(&route, &account));
+    }
+
+    #[test]
+    fn keyed_account_supports_crawl_route() {
+        let adapter = FirecrawlAdapter;
+        let route = adapter
+            .parse_route("v2/crawl", None)
+            .expect("crawl route should parse");
+        let account = provider_account("fc-test");
+
+        assert!(adapter.supports_account_for_route(&route, &account));
+    }
+
+    fn provider_account(api_key: &str) -> ProviderAccount {
+        ProviderAccount {
+            id: "firecrawl-test".to_owned(),
+            provider: ProviderId::Firecrawl,
+            name: "Firecrawl Test".to_owned(),
+            api_key: api_key.to_owned(),
+            base_url: None,
+            enabled: true,
+            status: ProviderAccountStatus::Active,
+            last_error: None,
+            cooldown_until: None,
+            last_used_at: None,
+            consecutive_failures: 0,
+            last_status_code: None,
+            weight: 100,
+            last_failure_at: None,
+        }
+    }
 }

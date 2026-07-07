@@ -272,7 +272,7 @@ fn normalize_provider_account_api_key(
 ) -> Result<String, AdminApiError> {
     let value = value.trim();
     if value.is_empty() {
-        if provider == ProviderId::Jina {
+        if matches!(provider, ProviderId::Firecrawl | ProviderId::Jina) {
             Ok(String::new())
         } else {
             Err(AdminApiError::BadRequest(message.to_owned()))
@@ -299,13 +299,25 @@ mod tests {
     }
 
     #[test]
-    fn rejects_blank_non_jina_api_key() {
+    fn allows_blank_firecrawl_api_key() {
+        let value = normalize_provider_account_api_key(
+            ProviderId::Firecrawl,
+            "   ",
+            "provider account api key is required",
+        )
+        .expect("firecrawl keyless account should be allowed");
+
+        assert_eq!(value, "");
+    }
+
+    #[test]
+    fn rejects_blank_non_keyless_provider_api_key() {
         let error = normalize_provider_account_api_key(
             ProviderId::Exa,
             "   ",
             "provider account api key is required",
         )
-        .expect_err("non-jina keyless account should be rejected");
+        .expect_err("non-keyless provider account should be rejected");
 
         assert!(matches!(error, AdminApiError::BadRequest(_)));
     }

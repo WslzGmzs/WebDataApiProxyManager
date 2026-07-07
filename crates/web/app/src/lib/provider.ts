@@ -21,10 +21,21 @@ export const PROVIDER_THEME_COLORS: Record<ProviderId, string> = {
   jina: '#F50057',
 }
 
+export const PROVIDER_DEFAULT_BASE_URLS: Record<ProviderId, string> = {
+  exa: 'https://api.exa.ai',
+  tavily: 'https://api.tavily.com',
+  firecrawl: 'https://api.firecrawl.dev',
+  jina: 'https://r.jina.ai',
+}
+
 export function providerTagClassName(provider: string) {
   return `tag provider-tag provider-${provider}`
 }
 
 export function getProviderLabel(provider: string) {
   return PROVIDER_LABELS[provider as ProviderId] ?? provider
+}
+
+export function getProviderDefaultBaseUrl(provider: ProviderId) {
+  return PROVIDER_DEFAULT_BASE_URLS[provider]
 }

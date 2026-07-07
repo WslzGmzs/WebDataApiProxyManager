@@ -1,5 +1,5 @@
 import { Drawer, ErrorBanner, ProviderSelect } from '../../ui/shared'
-import { getProviderLabel } from '../../lib/provider'
+import { getProviderDefaultBaseUrl, getProviderLabel } from '../../lib/provider'
 import type { ProviderId } from '../../types'
 
 export function CreateAccountDrawer({
@@ -53,8 +53,15 @@ export function CreateAccountDrawer({
   onBulkCreate: () => void
   t: (key: string, values?: Record<string, string | number>) => string
 }) {
-  const apiKeyOptional = provider === 'jina'
+  const apiKeyOptional = provider === 'firecrawl' || provider === 'jina'
+  const apiKeyNoteKey =
+    provider === 'firecrawl'
+      ? 'accounts.api_key_optional_firecrawl'
+      : provider === 'jina'
+        ? 'accounts.api_key_optional_jina'
+        : 'accounts.api_key_prefix_examples'
   const canCreate = Boolean(name.trim()) && (Boolean(apiKeyInput.trim()) || apiKeyOptional)
+  const defaultBaseUrl = getProviderDefaultBaseUrl(provider)
 
   return (
     <Drawer open={open} onClose={onClose} title={t('accounts.create')}>
@@ -89,9 +96,7 @@ export function CreateAccountDrawer({
             onChange={(event) => onApiKeyChange(event.target.value)}
           />
           <p className="field-note">
-            {apiKeyOptional
-              ? t('accounts.api_key_optional_jina')
-              : t('accounts.api_key_prefix_examples')}
+            {t(apiKeyNoteKey)}
           </p>
         </label>
         <label className="field">
@@ -110,7 +115,8 @@ export function CreateAccountDrawer({
         </label>
         <label className="field">
           <span>{t('accounts.base_url_optional')}</span>
-          <input value={baseUrl} onChange={(event) => onBaseUrlChange(event.target.value)} placeholder={t('accounts.base_url_placeholder')} />
+          <input value={baseUrl} onChange={(event) => onBaseUrlChange(event.target.value)} placeholder={defaultBaseUrl} />
+          <p className="field-note">{t('accounts.base_url_default', { url: defaultBaseUrl })}</p>
         </label>
         {createError ? <ErrorBanner message={createError} /> : null}
         {bulkError ? <ErrorBanner message={bulkError} /> : null}
